@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: archive
+      POSTGRES_PASSWORD: archive
+      POSTGRES_DB: archive
+      TZ: UTC
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # 仅在数据卷首次初始化时执行; 应用启动也会幂等执行同一脚本 (双保险)
+      - ./db/init/01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U archive -d archive"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://archive:archive@db:5432/archive
+      SCHEMA_PATH: /app/db/init/01_schema.sql
+      DB_POOL_MIN: "1"
+      DB_POOL_MAX: "10"
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:
